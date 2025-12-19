@@ -1,0 +1,14 @@
+---
+- name: Create folders on Pis
+  hosts: pis
+  become: false
+
+  tasks:
+    - name: Create folder on each Pi
+      file:
+        path: "/home/blinkitpi/myfolder_{{ inventory_hostname }}"
+        state: directory
+    - name: Create another folder inside "/home/blinkitpi/myfolder_{{ inventory_hostname }}
+      file:
+        path: "/home/blinkitpi/myfolder_{{ inventory_hostname }}/newFolder"
+        state: directory    

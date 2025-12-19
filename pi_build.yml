@@ -1,0 +1,125 @@
+---
+- name: Setup Raspberry Pi (TeamViewer commented for later)
+  hosts: pis
+  become: true
+
+  vars:
+    user: blinkitpi
+    home_dir: "/home/blinkitpi"
+
+  tasks:
+
+    # -------- ENV VARIABLES --------
+    - name: Ensure CUPS_PATH in .profile
+      lineinfile:
+        path: "{{ home_dir }}/.profile"
+        regexp: '^export CUPS_PATH='
+        line: 'export CUPS_PATH="{{ home_dir }}/paas/paas-cups-controller/"'
+        create: yes
+
+    - name: Ensure PAAS_CONTROLLER_SERVICE in .profile
+      lineinfile:
+        path: "{{ home_dir }}/.profile"
+        regexp: '^export PAAS_CONTROLLER_SERVICE='
+        line: 'export PAAS_CONTROLLER_SERVICE="paas_controller"'
+        create: yes
+
+    - name: Ensure PAAS_CLUSTER_ID in .profile
+      lineinfile:
+        path: "{{ home_dir }}/.profile"
+        regexp: '^export PAAS_CLUSTER_ID='
+        line: "export PAAS_CLUSTER_ID={{ cluster_id }}"
+        create: yes
+
+    # -------- HOSTNAME --------
+    - name: Set hostname
+      hostname:
+        name: "{{ hostname }}"
+
+    - name: Update /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127.0.1.1'
+        line: "127.0.1.1 {{ hostname }}"
+
+    # -------- SYSTEMD SERVICE --------
+    - name: Copy paas_controller.service
+      copy:
+        src: "{{ home_dir }}/paas/paas-cups-controller/paas_controller.service"
+        dest: /etc/systemd/system/paas_controller.service
+        remote_src: yes
+
+    - name: Enable and start paas_controller
+      systemd:
+        name: paas_controller.service
+        enabled: yes
+        state: started
+
+    # -------- AUTO LOGIN --------
+    - name: Enable auto login
+      replace:
+        path: /etc/lightdm/lightdm.conf
+        regexp: '#autologin-user='
+        replace: 'autologin-user=blinkitpi'
+
+    # -------- APT & PACKAGES --------
+    - name: Ensure non-free repo enabled
+      replace:
+        path: /etc/apt/sources.list
+        regexp: '^(deb .* main)$'
+        replace: '\1 non-free'
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Add user to lpadmin group
+      user:
+        name: "{{ user }}"
+        groups: lpadmin
+        append: yes
+
+    - name: Install required utilities
+      apt:
+        name:
+          - avahi-utils
+          - pup
+          - csvkit
+          - texlive-extra-utils
+          - curl
+          - matchbox-keyboard
+          - onboard
+        state: present
+
+    # -------- TIMEZONE --------
+    - name: Set timezone
+      timezone:
+        name: Asia/Kolkata
+
+    # -------- PRINTER --------
+    - name: Setup printer
+      command: >
+        lpadmin -p raspi-brother-dcpt420w-usb-local__cluster__{{ cluster_id }}
+        -E -v ipp://localhost:60000/ipp -m everywhere
+      ignore_errors: yes
+
+
+# ==================================================
+# TeamViewer (INTENTIONALLY COMMENTED – ENABLE LATER)
+# ==================================================
+
+# - name: Install TeamViewer deb
+#   apt:
+#     deb: "{{ home_dir }}/teamviewer_15.70.4_arm64.deb"
+#     state: present
+#
+# - name: Fix broken packages
+#   apt:
+#     update_cache: yes
+#     upgrade: yes
+#
+# - name: Setup TeamViewer
+#   command: teamviewer setup
+#
+# - name: Set TeamViewer password
+#   command: teamviewer passwd "paas@blinkitpi"
